@@ -3,25 +3,43 @@ require 'tokenizer'
 
 include Tokenizer
 
-file = 'corpus/rudyard kipling.txt'
+corpus = 'corpus/'
 
 MARKOV_CHAIN_ORDER = 2
 
 
 markov = Markov.new(MARKOV_CHAIN_ORDER)
 
-File.open(file, 'r') do |file|
-    file.each_line('') do |paragraph|
-        sentences = paragraph.split(/\.\w*/)
+Dir.foreach(corpus) do |file|
+    path = corpus + '/' + file
 
-        sentences.each do |sentence|
-            markov.learn(Tokenizer.tokenize(sentence.strip))
+    if File.file?(path) && File.extname(path) == ".txt"
+        puts "Learning from corpus file '#{path}'"
+        
+        File.open(path, 'r') do |file|
+            file.each_line('') do |paragraph|
+                sentences = paragraph.split(/\.\w*/)
+        
+                sentences.each do |sentence|
+                    markov.learn(Tokenizer.tokenize(sentence.strip))
+                end
+                #markov.learn(Tokenizer.tokenize(paragraph.strip))
+            end
         end
-        #markov.learn(Tokenizer.tokenize(paragraph.strip))
     end
 end
 
-markov.save('corpus/rudyard kipling.markov')
+
+puts "Saving chains to file"
+
+markov.save(corpus + 'chains.markov')
+
+#puts "Saving graph to file"
+#File.open(corpus_file + '.dot', 'w') do |file|
+#    markov.save_graph(file)
+#end
+
+puts "Average entropy per term is #{markov.get_average_entropy_per_term}"
 
 10.times do 
     sentence = markov.generate

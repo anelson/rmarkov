@@ -85,6 +85,34 @@ class TestMarkov < Test::Unit::TestCase
         end
     end
 
+    def test_average_no_entropy
+        # Train with text that has no duplicate terms and thus no entropy
+        @markov.learn(Tokenizer.tokenize(SIMPLE_NO_ENTROPY_TEXT))
+        assert_equal(0.0, @markov.get_average_entropy_per_term)
+    end
+
+    def test_average_known_entropy
+        # Train with text that has no duplicate terms and thus no entropy
+        @markov.learn(Tokenizer.tokenize(SIMPLE_UNIFORM_ENTROPY_TEXT))
+
+        # There are a total of 10 tuples, 2 of which have non-zero entropy, so that's
+        # an average per-term entropy of 0.2
+        assert_equal(0.2, @markov.get_average_entropy_per_term)
+    end
+
+    def test_save_graph
+        #No way to verify the dot file output, but at least make sure it doesn't eat shit and die
+        outstr = ""
+        @markov.learn(Tokenizer.tokenize(KNOWN_ANSWER_TEST_INPUT))
+        @markov.save_graph(outstr)
+
+        assert_not_equal("", outstr)
+
+        File.open('test_graph.dot', 'w') do |file|
+            file << outstr
+        end
+    end
+
     def test_known_answer
         #Train the generator with the test input, and compare the resulting states with
         #those produced by a known-good reference implementation
