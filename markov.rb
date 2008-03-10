@@ -1,3 +1,5 @@
+include Math
+
 class Markov
     NONWORD = "####"
 
@@ -6,9 +8,8 @@ class Markov
         @order = order
     end
 
-    def learn(text) 
-        word_list = tokenize_text(text);
-
+    def learn(word_list) 
+        return if word_list.length <= @order
         #Pad 'words' with the NONWORD char to get things rolling
         @order.times do
             word_list.insert(0, NONWORD)
@@ -32,6 +33,31 @@ class Markov
         output << generate_word(state) while state.length > 0
 
         return output
+    end
+
+    # Measures the entropy of a generated string in terms of Shannon's information theory
+    # Returns an array with length identical to tokens.length, where each element is the entropy (in bits)
+    # of the value
+    def measure_entropy_for_tokens(tokens)
+        #Determine the entropy (in bits) of the set of tokens relative to the markov chains
+        #by noting the probability that each token would be selected
+        return [] if tokens.length == 0
+
+        state = []
+        @order.times do
+            state << NONWORD
+        end
+
+        entropy = []
+        tokens.each do |token|
+            entropy << measure_entropy_for_state(state)
+
+            # Shift the token into the state, and the left-most state token off the array
+            state << token
+            state.shift
+        end
+
+        entropy
     end
 
     # Saves the markov chains to a file
@@ -85,6 +111,62 @@ class Markov
     end
 
 private
+    LOG2 = Math.log(2)
+
+    def measure_entropy_for_state(state)
+        if state.length != @order
+            raise ArgumentError, "The state vector [#{state.join(',')}] is not the right length; length is #{state.length}, but should be #{@order+1}"
+        end
+
+        # For each dimension of the state vector, note the probability of the vector's value being selected over alterate values
+        # Per shannon, information entropy (http://en.wikipedia.org/wiki/Information_entropy) for a variable X with n possible values
+        # [X0,X1,...,Xn], where each possible value Xi has probability P(Xi), the entropy (in bits) of the variable is H(X):
+        #
+        # H(x) = -SUM(0..n P(Xi) * log2(P(Xi))
+        #
+        # For the words in the markov chain, the probability of each possible word in each link of the chain is equal, so
+        # the P(Xi) for any Xi is 1/N where N is the number of possible words.  For the last word in the state, which is selected
+        # from an array which may contain multiple occurrances of the same word, the probability P(Xi) will be potentialy different
+        # for different values of i, hence the more complicated logic to compute this final entropy value
+
+        # Determine the entropy of the last word in 'state', which is the one picked out of an array of possible values            
+        current_word = @words
+        state.each do |state_word|
+            if !current_word.include?(state_word)
+                raise ArgumentError, "The state vector [#{state.join(',')}] was not generated from the current Markov chains"
+            end
+            current_word = current_word[state_word]
+        end
+
+        #current_word is the array of possible next states.  The array, unlike the hash, may contain
+        #duplicate values, so count the number of occurrences of the value in the state vector
+        #
+        # build a hash consisting of each unique word in the array as the key, and the 
+        # number of times that word appears in the array as the value.  From this, the P(Xi) 
+        # function can be determined
+        unique_words = {}
+        current_word.each do |word|
+            unique_words[word] ||= 0
+            unique_words[word] += 1
+        end
+
+        #Now that occurrence counts are known, convert them to probabilities
+        # Compute sum[p(xi) * log2(p(xi))] for all x to get the entropy
+        # Ruby doesn't have a log2 function, so take advantage of log properties
+        # that log2(x) = logn(x) / logn(2)
+        entropy = 0.0
+        unique_words.each_pair do |key, value|
+            prob = value.to_f / current_word.length.to_f
+
+            entropy += prob * Math.log(prob) / LOG2
+        end
+
+        entropy = -entropy
+
+        #puts "Computed entropy #{entropy} for state [#{state.join(',')}]"
+
+        entropy
+    end
 
     def save_tuples_prefix(prefix, words, file)
         if words.kind_of?(Array)
@@ -164,13 +246,6 @@ private
         #puts "Generated word '#{word}' from state vector [#{state.join(',')}]"
 
         word
-    end
-
-    def tokenize_text(text)
-        # Split text into an array of words on whitespace
-        words = text.split(/\s+/)
-
-        words
     end
 
     def learn_word(wordStates)

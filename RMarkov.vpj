@@ -48,7 +48,7 @@
 			</Target>
 		</Menu>
 	</Config>
-	<Files>
+	<CustomFolders>
 		<Folder
 			Name="Bitmaps"
 			Filters="*.bmp"/>
@@ -58,7 +58,6 @@
 		<Folder
 			Name="Other Files"
 			Filters="">
-			<F N="test_yaml_bug.rb"/>
 		</Folder>
 		<Folder
 			Name="Resource Files"
@@ -66,7 +65,12 @@
 		<Folder
 			Name="Source Files"
 			Filters="*.c;*.C;*.cc;*.cpp;*.cp;*.cxx;*.prg;*.pas;*.dpr;*.asm;*.s;*.bas;*.java;*.cs;*.sc;*.e;*.cob;*.html;*.rc;*.tcl;*.py;*.pl"/>
+	</CustomFolders>
+	<Files AutoFolders="DirectoryView">
+		<F N="generate.rb"/>
 		<F N="markov.rb"/>
 		<F N="markov_tests.rb"/>
+		<F N="test_yaml_bug.rb"/>
+		<F N="tokenizer.rb"/>
 	</Files>
 </Project>

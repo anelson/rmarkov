@@ -1,24 +1,30 @@
 require 'markov'
+require 'tokenizer'
 require 'test/unit'
+
+include Tokenizer
 
 class TestMarkov < Test::Unit::TestCase
     SIMPLE_TEXT = "foo bar baz boo foo baz bar boo"
     SIMPLE_TEXT_WORDS = SIMPLE_TEXT.scan(/\w+/)
+
+    SIMPLE_NO_ENTROPY_TEXT = "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty"
+    SIMPLE_UNIFORM_ENTROPY_TEXT = "one two FOO one two BAR one two BAZ one two BOO"
      
     def setup
         @markov = Markov.new(2)
     end
 
     def test_learn_empty_text
-        @markov.learn("")
+        @markov.learn(Tokenizer.tokenize(""))
     end
 
     def test_learn_simple_text
-        @markov.learn(SIMPLE_TEXT)
+        @markov.learn(Tokenizer.tokenize(SIMPLE_TEXT))
     end
 
     def test_generate_simple_text
-        @markov.learn(SIMPLE_TEXT)
+        @markov.learn(Tokenizer.tokenize(SIMPLE_TEXT))
 
         generated = @markov.generate
 
@@ -31,10 +37,58 @@ class TestMarkov < Test::Unit::TestCase
         end
     end
 
+    def test_zero_entropy
+        @markov.learn(Tokenizer.tokenize(SIMPLE_NO_ENTROPY_TEXT))
+
+        tokens = @markov.generate
+        entropy = @markov.measure_entropy_for_tokens(tokens)
+
+        assert_equal(tokens.length,
+            entropy.length)
+
+        # Since there are no repeated words in the sample text, the entropy of each token is zero bits
+        entropy.each_with_index do |ent, index|
+            assert_equal(0,
+                ent,
+                "Entropy for token #{tokens[index]} should be zero but isn't")
+        end
+    end
+
+    def test_uniform_entropy
+        @markov.learn(Tokenizer.tokenize(SIMPLE_UNIFORM_ENTROPY_TEXT))
+
+        tokens = @markov.generate
+        entropy = @markov.measure_entropy_for_tokens(tokens)
+
+        #puts tokens.join(',')
+
+        assert_equal(tokens.length,
+            entropy.length)
+
+        # In the test data, 'one' and 'two' have zero entropy, while 'FOO', 'BAR', 'BAZ', and 'BOO' should have
+        # equal entropy, 2 bits
+        entropy.each_with_index do |ent, index|
+            case tokens[index]
+                when "one", "two"
+                    assert_equal(0.0,
+                        ent,
+                        "A value of 'one' or 'two' has non-zero entropy")
+
+                when "FOO","BAR","BAZ","BOO"
+                    assert_equal(2,
+                        ent,
+                        "A value of FOO, BAR, BAZ, or BOO has the wrong entropy")
+
+                else
+                    fail("Unexpected token '#{tokens[index]}'")
+            end     
+        end
+    end
+
     def test_known_answer
         #Train the generator with the test input, and compare the resulting states with
         #those produced by a known-good reference implementation
-        @markov.learn(KNOWN_ANSWER_TEST_INPUT)
+        @markov.learn(Tokenizer.tokenize(KNOWN_ANSWER_TEST_INPUT))
 
         testStates = @markov.get_states
 
@@ -44,7 +98,7 @@ class TestMarkov < Test::Unit::TestCase
     end
 
     def test_generate
-        @markov.learn(KNOWN_ANSWER_TEST_INPUT)
+        @markov.learn(Tokenizer.tokenize(KNOWN_ANSWER_TEST_INPUT))
         state = @markov.get_states
 
         generated = @markov.generate
@@ -78,7 +132,7 @@ class TestMarkov < Test::Unit::TestCase
     end
 
     def test_load_save_repeatability
-        @markov.learn(KNOWN_ANSWER_TEST_INPUT)
+        @markov.learn(Tokenizer.tokenize(KNOWN_ANSWER_TEST_INPUT))
         @markov.save('markov1.txt')
         @markov = Markov::load('markov1.txt')
         @markov.save('markov2.txt')
@@ -101,7 +155,7 @@ class TestMarkov < Test::Unit::TestCase
     end
 
     def test_load_save_preserve_state
-        @markov.learn(KNOWN_ANSWER_TEST_INPUT)
+        @markov.learn(Tokenizer.tokenize(KNOWN_ANSWER_TEST_INPUT))
         old_states = @markov.get_states
 
         #dumpStates(old_states, 0)
