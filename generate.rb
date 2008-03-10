@@ -7,8 +7,16 @@ corpus = 'corpus/'
 
 MARKOV_CHAIN_ORDER = 2
 
-
 markov = Markov.new(MARKOV_CHAIN_ORDER)
+
+def tokenize_chars(word)
+    chars = []
+    word.strip.scan(/[[:alnum:]]/) do |char|
+        chars << char
+    end
+
+    chars
+end
 
 Dir.foreach(corpus) do |file|
     path = corpus + '/' + file
@@ -21,18 +29,26 @@ Dir.foreach(corpus) do |file|
                 sentences = paragraph.split(/\.\w*/)
         
                 sentences.each do |sentence|
-                    markov.learn(Tokenizer.tokenize(sentence.strip))
+                    words = Tokenizer.tokenize(sentence.strip)
+                    #words.each do |word|
+                        #chars = tokenize_chars(word)
+                        chars = tokenize_chars(sentence)
+
+                        #puts "Learning '#{word}'"
+                        markov.learn(words)
+                    #end
                 end
                 #markov.learn(Tokenizer.tokenize(paragraph.strip))
             end
         end
+
+        puts "After learning file '#{path}', average entropy per term is #{markov.get_average_entropy_per_term}"
     end
 end
 
 
-puts "Saving chains to file"
-
-markov.save(corpus + 'chains.markov')
+#puts "Saving chains to file"
+#markov.save(corpus + 'chains.markov')
 
 #puts "Saving graph to file"
 #File.open(corpus_file + '.dot', 'w') do |file|
@@ -41,19 +57,28 @@ markov.save(corpus + 'chains.markov')
 
 puts "Average entropy per term is #{markov.get_average_entropy_per_term}"
 
+# Generate a handful of passphrases of at least 128 bits of entropy
+
 10.times do 
-    sentence = markov.generate
-    entropy = markov.measure_entropy_for_tokens(sentence)
+    total_entropy = 0.0
 
-    puts "Generated #{sentence.length} tokens for sentence"
+    while total_entropy < 128.0
+        sentence = markov.generate
+        entropies = markov.measure_entropy_for_tokens(sentence)
 
-    total_entropy = 0
-    sentence.each_with_index do |token, index|
-        puts "\t#{token} (#{entropy[index]} bits)"
-        total_entropy += entropy[index]
+        sentence_entropy = 0.0
+        entropies.each do |entropy|
+            sentence_entropy += entropy
+        end
+    
+        print sentence.join(' ')
+        print "\t(#{sentence_entropy} bits) "
+        puts
+
+        total_entropy += sentence_entropy
     end
 
-    puts " - Total entropy: #{total_entropy} bits"
+    puts " Total entropy #{total_entropy} bits"
     puts
 
 end

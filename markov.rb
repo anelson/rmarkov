@@ -26,6 +26,10 @@ class Markov
     end
 
     def generate
+        if @words.length == 0
+            raise ArgumentError, "The markov chains have not been sufficiently trained to generate output text"
+        end
+
         #Start by picking a random state starting with NONWORD
         state = generate_initial_state()
         output = []

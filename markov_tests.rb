@@ -159,6 +159,25 @@ class TestMarkov < Test::Unit::TestCase
             state[second_last_word][last_word].include?(Markov::NONWORD))
     end
 
+    def test_generate_chars
+        #The same markov code can be used to build markov chains of chars from words
+        words = Tokenizer.tokenize(KNOWN_ANSWER_TEST_INPUT)
+        words.each do |word|
+            chars = []
+            word.scan(/./) do |char|
+                chars << char
+            end
+
+            @markov.learn(chars)
+        end
+
+        generated = @markov.generate
+
+        assert_equal(true,
+            @markov.get_average_entropy_per_term() > 0,
+            "Average entropy per term is too low")
+    end
+
     def test_load_save_repeatability
         @markov.learn(Tokenizer.tokenize(KNOWN_ANSWER_TEST_INPUT))
         @markov.save('markov1.txt')
