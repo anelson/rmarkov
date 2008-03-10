@@ -1,4 +1,3 @@
-
 class Markov
     NONWORD = "####"
 
@@ -26,34 +25,96 @@ class Markov
     def generate
         #Start by picking a random state starting with NONWORD
         state = generate_initial_state()
-        output = Array.new
+        output = []
 
-        output << generate_word(state) while state[@order - 1] != NONWORD
+        #puts "Initial state: #{state.join(',')}"
 
-        return output.join(" ")
+        output << generate_word(state) while state.length > 0
+
+        return output
+    end
+
+    # Saves the markov chains to a file
+    def save(filename)
+        state = {
+            :order => @order,
+            :words => @words
+        }
+
+        File.open(filename, 'w') do |file|
+            file << @order << $/
+            save_tuples @words, file
+        end
+    end
+
+    # Creates and returns a new Markov object based on chains previously saved
+    # with save
+    def self.load(filename)
+        File.open(filename, 'r') do |file|
+            order = file.readline.chomp
+
+            markov = Markov.new(order.to_i)
+
+            markov.load_tuples(file)
+    
+            markov
+        end
     end
 
     def get_states
         return @words
     end
 
+    def set_states(states)
+        @words = states
+    end
+
+    def save_tuples(words, file)
+        words.each_pair do |key, value|
+            save_tuples_prefix key, value, file
+        end
+    end
+
+    def load_tuples(file)
+        words = {}
+        file.each_line do |line|
+            tuple = line.chomp.split("\t")
+
+            learn_word(tuple)
+        end
+    end
+
+private
+
+    def save_tuples_prefix(prefix, words, file)
+        if words.kind_of?(Array)
+            words.each do |word|
+                file << prefix << "\t" << word << $/
+            end
+        else
+            words.each_pair do |word, next_words|
+                save_tuples_prefix(prefix + "\t" + word, next_words, file)
+            end
+        end
+    end
+
     def generate_initial_state()
         # Build an array of @order elements, containing a randomly-selected starting sequence.
-        state = Array.new
+        state = []
 
-        current_word = @words
-
-        @order.times do
-            # Pick a random key from the keys in hash table current_word, then
-            # look up the value in current_word corresponding to that key
-            rand_key = current_word.keys[rand(current_word.keys.length)]
-
-            current_word = current_word[rand_key]
-
-            # rand_key is a word which occurred in the training corpus, and which forms
-            # part of the state
-            state << rand_key
+        @order.times do 
+            state << NONWORD
         end
+
+        #puts "Seeded state with NONWORD values; priming state with word values"
+
+        #Iterate generate_word @order times to clear the NONWORD values out of 'state' and prime it with
+        #actual words
+        @order.times do
+            generate_word(state)
+        end
+
+        #puts "Seeded state: #{state.join(',')}"
 
         state
     end
@@ -65,7 +126,17 @@ class Markov
         #
         # Append a new word to the end of the array based on the state transition probabilities
         # for the words in the array
-        state << generate_next_word(state)
+        if state.length == @order
+            next_word = generate_next_word(state)
+    
+            # Only add this to the state vector if it's a word value.
+            # NONWORD indicates the end of the sequence
+            if next_word != NONWORD
+                state << next_word
+            end
+        end
+
+        #puts "Generating word #{state[0]}; state: [#{state.join(',')}]"
 
         # 'pop' the left-most word off the state and return it
         return state.shift
@@ -88,7 +159,11 @@ class Markov
         end
 
         # current_word is now an array of possible next works.  Just pick one at random
-        return current_word[rand(current_word.length)]
+        word = current_word[rand(current_word.length)]
+
+        #puts "Generated word '#{word}' from state vector [#{state.join(',')}]"
+
+        word
     end
 
     def tokenize_text(text)
@@ -100,11 +175,11 @@ class Markov
 
     def learn_word(wordStates)
         #wordStates[wordStates.length-1] is the word to learn; the preceeding word(s) are used to build the Markov chain
-        puts "Learning #{wordStates.join(',')}"
+        #puts "Learning #{wordStates.join(',')}"
 
         current_word = @words
         wordStates.each_with_index do |word, index|
-            puts "#{word}"
+            #puts "#{word}"
 
             if index < @order - 1
                 current_word[word] ||= {}

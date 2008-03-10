@@ -57,7 +57,9 @@
 			Filters="*.h;*.H;*.hh;*.hpp;*.hxx;*.inc;*.sh;*.cpy;*.if"/>
 		<Folder
 			Name="Other Files"
-			Filters=""/>
+			Filters="">
+			<F N="test_yaml_bug.rb"/>
+		</Folder>
 		<Folder
 			Name="Resource Files"
 			Filters="*.ico;*.cur;*.dlg"/>

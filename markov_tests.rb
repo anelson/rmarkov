@@ -3,7 +3,7 @@ require 'test/unit'
 
 class TestMarkov < Test::Unit::TestCase
     SIMPLE_TEXT = "foo bar baz boo foo baz bar boo"
-    SIMPLE_TEXT_WORDS = SIMPLE_TEXT.scan(/ /)
+    SIMPLE_TEXT_WORDS = SIMPLE_TEXT.scan(/\w+/)
      
     def setup
         @markov = Markov.new(2)
@@ -20,11 +20,14 @@ class TestMarkov < Test::Unit::TestCase
     def test_generate_simple_text
         @markov.learn(SIMPLE_TEXT)
 
-        string = @markov.generate
+        generated = @markov.generate
+
+        assert(generated.length > 0)
 
         # Make sure the resulting words appear in the list of possible words
-        string.scan(/ /).each do |word|
-            assert_equal(true, SIMPLE_TEXT_WORDS.include?(word))
+        generated.each do |word|
+            assert_equal(true, SIMPLE_TEXT_WORDS.include?(word),
+                "Generated word '#{word}' which isn't included in the corpus '#{SIMPLE_TEXT_WORDS.join(',')}'")
         end
     end
 
@@ -35,42 +38,82 @@ class TestMarkov < Test::Unit::TestCase
 
         testStates = @markov.get_states
 
-        dumpStates(testStates, 0)
+        #dumpStates(testStates, 0)
 
-        KNOWN_ANSWER_STATES.each_key do |word1| 
-            known_good_word1_states = KNOWN_ANSWER_STATES[word1]
+        assert_states_match(KNOWN_ANSWER_STATES, testStates)
+    end
 
-            assert_equal(true, 
-                testStates.include?(word1),
-                "The state table is missing first-level word '#{word1}'")
+    def test_generate
+        @markov.learn(KNOWN_ANSWER_TEST_INPUT)
+        state = @markov.get_states
 
-            test_word1_states = testStates[word1]
+        generated = @markov.generate
 
-            known_good_word1_states.each_key do |word2|
-                assert_equal(true,
-                    test_word1_states.include?(word2),
-                    "The state table for first-level word '#{word1}' is missing second-level word '#{word2}'")
+        first_word = generated[0]
+        second_word = generated[1]
 
-                known_good_word2_words = known_good_word1_states[word2]
-                test_word2_words = test_word1_states[word2]
+        second_last_word = generated[generated.length - 2]
+        last_word = generated[generated.length - 1]
 
-                known_good_word2_words.each do |word3|
-                    assert_equal(true,
-                        test_word2_words.include?(word3),
-                        "The word list for tuble '#{word1}, #{word2}' is missing word '#{word3}'")
-                end
+        # The first two words should appear in the state table preceed by the NONWORD marker
+        assert_equal(true,
+            state.include?(Markov::NONWORD))
 
-                diff = known_good_word2_words - test_word2_words
+        assert_equal(true,
+            state[Markov::NONWORD].include?(first_word))
 
-                assert_equal(0,
-                    diff.length,
-                    "The state table for the word pair ('#{word1}','#{word2}') doesn't match.  Should be [#{known_good_word2_words.join(',')}]; actually is [#{test_word2_words.join(',')}]")
-            end
+        assert_equal(true,
+            state[Markov::NONWORD][first_word].include?(second_word))
+
+        # The last two words should appear in the state table with the NONWORD marker after
+        assert_equal(true,
+            state.include?(second_last_word),
+            "The generated sentence [#{generated.join(' ')}] 2nd to last word '#{second_last_word}' doesn't have an entry in the Markov chain table")
+
+        assert_equal(true,
+            state[second_last_word].include?(last_word))
+
+        assert_equal(true,
+            state[second_last_word][last_word].include?(Markov::NONWORD))
+    end
+
+    def test_load_save_repeatability
+        @markov.learn(KNOWN_ANSWER_TEST_INPUT)
+        @markov.save('markov1.txt')
+        @markov = Markov::load('markov1.txt')
+        @markov.save('markov2.txt')
+
+        markov1 = []
+        markov2 = []
+
+        File.open('markov1.txt', 'r') do |file1|
+            markov1 << file1.readline.chomp
         end
 
-        assert_equal(KNOWN_ANSWER_STATES.length,
-            testStates.length,
-            "The state table's size differs from the known correct table")
+        File.open('markov2.txt', 'r') do |file2|
+            markov2 << file2.readline.chomp
+        end
+
+        markov1.sort!
+        markov2.sort!
+
+        assert_equal(markov1, markov2)
+    end
+
+    def test_load_save_preserve_state
+        @markov.learn(KNOWN_ANSWER_TEST_INPUT)
+        old_states = @markov.get_states
+
+        #dumpStates(old_states, 0)
+
+        @markov.save('markov.txt')
+        @markov = Markov::load('markov.txt')
+
+        new_states = @markov.get_states
+
+        #dumpStates(new_states, 0)
+
+        assert_states_match(old_states, new_states)
     end
 
     def dumpStates(states, indentLevel)
@@ -86,6 +129,43 @@ class TestMarkov < Test::Unit::TestCase
                 dumpStates(value, indentLevel + 1)
             end
         end
+    end
+
+    def assert_states_match(expected, actual)
+        expected.each_key do |word1| 
+            expected_word1_states = expected[word1]
+
+            assert_equal(true, 
+                actual.include?(word1),
+                "The state table is missing first-level word '#{word1}'")
+
+            actual_word1_states = actual[word1]
+
+            expected_word1_states.each_key do |word2|
+                assert_equal(true,
+                    actual_word1_states.include?(word2),
+                    "The state table for first-level word '#{word1}' is missing second-level word '#{word2}'")
+
+                expected_word2_words = expected_word1_states[word2]
+                actual_word2_words = actual_word1_states[word2]
+
+                expected_word2_words.each do |word3|
+                    assert_equal(true,
+                        actual_word2_words.include?(word3),
+                        "The word list for tuple '#{word1},#{word2}' is missing word '#{word3}'.  Word list should be [#{expected_word2_words.join(',')}], but is actually [#{actual_word2_words.join(',')}]")
+                end
+
+                diff = expected_word2_words - actual_word2_words
+
+                assert_equal(0,
+                    diff.length,
+                    "The state table for the word pair ('#{word1}','#{word2}') doesn't match.  Should be [#{expected_word2_words.join(',')}]; actually is [#{actual_word2_words.join(',')}]")
+            end
+        end
+
+        assert_equal(expected.length,
+            actual.length,
+            "The state table's size differs from the known correct table")
     end
 
     # The input into the known-good markov text generation reference implementation, used to
