@@ -3,7 +3,7 @@ require 'tokenizer'
 
 include Tokenizer
 
-corpus = 'corpus/'
+corpus = File.dirname(__FILE__) + '/corpus'
 
 MARKOV_CHAIN_ORDER = 2
 

@@ -6,11 +6,14 @@ class Markov
     def initialize(order)
         @words = Hash.new
         @order = order
+        @tuple_entropy_cache = {}
     end
 
     def learn(word_list) 
         # Don't learn anything from sequences shorter than the order 
         return if word_list.length <= @order
+
+        word_list = word_list.clone
 
         #Pad 'words' with the NONWORD char to get things rolling
         @order.times do
@@ -23,6 +26,8 @@ class Markov
         word_list.each_with_index do |word, index| 
             learn_word(word_list[index - @order, @order + 1]) unless index < @order
         end
+
+        @tuple_entropy_cache.clear
     end
 
     def generate
@@ -32,6 +37,11 @@ class Markov
 
         #Start by picking a random state starting with NONWORD
         state = generate_initial_state()
+        generate_from_state(state)
+    end
+
+    # Generates a chain given the starting state
+    def generate_from_state(state)
         output = []
 
         #puts "Initial state: #{state.join(',')}"
@@ -112,6 +122,9 @@ class Markov
         #Determine the entropy (in bits) of the set of tokens relative to the markov chains
         #by noting the probability that each token would be selected
         return [] if tokens.length == 0
+        if tokens.length <= @order
+            raise ArgumentError, "Tokens [#{tokens.join}] have length #{tokens.length}, which is too small for order-#{@order} Markov chains"
+        end
 
         state = []
         @order.times do
@@ -221,9 +234,32 @@ private
         # for different values of i, hence the more complicated logic to compute this final entropy value
 
         # Determine the entropy of the last word in 'state', which is the one picked out of an array of possible values            
-        next_words = get_possible_next_words_for_tuple(state)
+        # NB: 'state' is reused by the callers and will be modified in place.  Thus, use a clone to populate the cache
+        state_clone = state.clone
+        if !@tuple_entropy_cache.has_key?(state_clone)
+            #puts "Computing entropy for '#{state_clone.join}'"
+            #puts "Cache contains entries for: "
+            #@tuple_entropy_cache.keys.each do |key|
+            #    puts "\t#{key}"
+            #    if key == state_clone
+            #        puts "has_key? returned false for #{state_clone}, but I just found key #{key}"
+            #        exit(-1)
+            #    end
+            #end
 
-        compute_entropy_for_range(next_words)
+            next_words = get_possible_next_words_for_tuple(state_clone)
+
+            @tuple_entropy_cache[state_clone] = compute_entropy_for_range(next_words)
+            #if !@tuple_entropy_cache.has_key?(state_clone.clone)
+                #puts "I just put it in the cache and now it's not there!"
+            #end
+
+            #puts "Computed entropy for '#{state_clone.join}'"
+        #else
+            #puts "Word '#{state_clone.join}' is in cache"
+        end
+
+        @tuple_entropy_cache[state_clone]
     end
 
     # Given an array of possible values of a variable, computes the entropy (in bits) of the variable
@@ -236,8 +272,8 @@ private
         # function can be determined
         unique_words = {}
         values.each do |word|
-            unique_words[word] ||= 0
-            unique_words[word] += 1
+            unique_words[word] ||= 0.0
+            unique_words[word] += 1.0
         end
 
         #Now that occurrence counts are known, convert them to probabilities
@@ -245,8 +281,9 @@ private
         # Ruby doesn't have a log2 function, so take advantage of log properties
         # that log2(x) = logn(x) / logn(2)
         entropy = 0.0
+        values_length_f = values.length.to_f
         unique_words.each_pair do |key, value|
-            prob = value.to_f / values.length.to_f
+            prob = value / values_length_f
 
             entropy += prob * Math.log(prob) / LOG2
         end
@@ -321,10 +358,10 @@ private
         end
 
         state.each do |word|
-            if !next_words.include?(word)
+            next_words = next_words[word]
+            if next_words == nil
                 raise ArgumentError, "Word state [#{state.join(',')}] isn't a valid tuple"
             end
-            next_words = next_words[word]
         end
 
         next_words
